@@ -59,7 +59,7 @@ WarungOS mengimplementasikan seluruh kebutuhan pada PRD v1.0 secara bertahap:
 
 ## 🎨 Desain Glassmorphism & Penyesuaian Tema
 
-Sesuai preferensi visual pengguna, tema aplikasi menghindari gradasi ungu umum (*AI slop*) dan menggunakan palet modern **Fintech / Retail Pro**:
+Sesuai preferensi visual pengguna, menggunakan palet modern **Fintech / Retail Pro**:
 
 - **Latar Belakang**: *Matte Obsidian* (`#0B0F17`)
 - **Aksen Utama**: *Crisp Emerald* (`#10B981` / `#059669`)
