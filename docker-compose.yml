@@ -1,0 +1,12 @@
+services:
+  warungos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:./dev.db
+      - JWT_SECRET=warungos-docker-local-secret-change-in-production
+      - NODE_ENV=production
+    restart: unless-stopped

@@ -1,0 +1,214 @@
+// WarungOS Database Schema
+// Optimized for multi-tenant SaaS architecture (PRD Section 9 & 10)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String       @id @default(uuid())
+  name            String
+  email           String       @unique
+  passwordHash    String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenantUsers     TenantUser[]
+  stockMovements  StockMovement[]
+  sales           Sale[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Tenant {
+  id           String       @id @default(uuid())
+  name         String
+  businessType String       @default("Warung Kelontong")
+  city         String       @default("Jakarta")
+  timezone     String       @default("Asia/Jakarta")
+  status       String       @default("ACTIVE") // ACTIVE, SUSPENDED
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  tenantUsers     TenantUser[]
+  categories      Category[]
+  products        Product[]
+  stockMovements  StockMovement[]
+  sales           Sale[]
+  saleItems       SaleItem[]
+  payments        Payment[]
+  auditLogs       AuditLog[]
+
+  @@map("tenants")
+}
+
+model TenantUser {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  role      String   @default("OWNER") // OWNER, CASHIER, STAFF
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_users")
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products  Product[]
+
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model Product {
+  id           String          @id @default(uuid())
+  tenantId     String
+  categoryId   String?
+  name         String
+  sku          String?
+  unit         String          @default("pcs")
+  costPrice    Float           @default(0)
+  sellPrice    Float           @default(0)
+  stockBalance Float           @default(0)
+  minStock     Float           @default(0)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category     Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  stockMovements StockMovement[]
+  saleItems    SaleItem[]
+
+  @@index([tenantId])
+  @@index([tenantId, sku])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model StockMovement {
+  id            String   @id @default(uuid())
+  tenantId      String
+  productId     String
+  movementType  String   // OPENING_BALANCE, IN, OUT, ADJUSTMENT, SALE, VOID
+  quantity      Float    // Positive for IN/VOID, negative for SALE/OUT
+  referenceType String?  // SALE, ADJUSTMENT, MANUAL
+  referenceId   String?
+  reason        String?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  creator       User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([productId])
+  @@map("stock_movements")
+}
+
+model Sale {
+  id            String     @id @default(uuid())
+  tenantId      String
+  receiptNo     String
+  cashierId     String
+  status        String     @default("COMPLETED") // COMPLETED, VOID
+  subtotal      Float      @default(0)
+  discountTotal Float      @default(0)
+  grandTotal    Float      @default(0)
+  paidTotal     Float      @default(0)
+  changeTotal   Float      @default(0)
+  createdAt     DateTime   @default(now())
+  voidedAt      DateTime?
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cashier       User       @relation(fields: [cashierId], references: [id], onDelete: Restrict)
+  items         SaleItem[]
+  payments      Payment[]
+
+  @@unique([tenantId, receiptNo])
+  @@index([tenantId])
+  @@index([cashierId])
+  @@index([createdAt])
+  @@map("sales")
+}
+
+model SaleItem {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  saleId              String
+  productId           String
+  productNameSnapshot String
+  qty                 Float
+  costPriceSnapshot   Float
+  sellPriceSnapshot   Float
+  discountAmount      Float    @default(0)
+  lineTotal           Float
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  tenantId  String
+  saleId    String
+  method    String   @default("CASH") // CASH, QRIS, TRANSFER
+  amount    Float
+  reference String?
+  paidAt    DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([saleId])
+  @@map("payments")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  actorId    String
+  action     String   // CREATE, UPDATE, DELETE, VOID, ADJUST_STOCK
+  entityType String   // SALE, PRODUCT, STOCK, TENANT
+  entityId   String?
+  metadata   String?  // JSON string
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
